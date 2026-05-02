@@ -2,42 +2,39 @@
 <html lang="sv">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Keeshond Jump</title>
 
 <style>
-  body {
-    margin: 0;
-    overflow: hidden;
-    background: #70c5ce;
-    touch-action: manipulation;
-  }
+body {
+  margin: 0;
+  overflow: hidden;
+  background: #70c5ce;
+}
 
-  canvas {
-    display: block;
-  }
+canvas {
+  display: block;
+}
 
-  #startScreen, #gameOverScreen {
-    position: absolute;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    background: rgba(0,0,0,0.5);
-    color: white;
-    font-family: sans-serif;
-  }
+.screen {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-direction: column;
+  background: rgba(0,0,0,0.5);
+  color: white;
+  font-family: sans-serif;
+}
 
-  button {
-    padding: 15px 25px;
-    font-size: 18px;
-    border: none;
-    border-radius: 10px;
-    background: #f4a261;
-    color: white;
-  }
+button {
+  padding: 15px 25px;
+  font-size: 18px;
+  border-radius: 10px;
+  border: none;
+}
 </style>
 </head>
 
@@ -45,14 +42,14 @@
 
 <canvas id="gameCanvas"></canvas>
 
-<div id="startScreen">
+<div id="startScreen" class="screen">
   <h1>Keeshond Jump 🐶</h1>
-  <button onclick="startGame()">Starta</button>
+  <button onclick="startGame()">Start</button>
 </div>
 
-<div id="gameOverScreen" style="display:none;">
+<div id="gameOverScreen" class="screen" style="display:none;">
   <h1>Game Over</h1>
-  <p id="finalScore"></p>
+  <p id="scoreText"></p>
   <button onclick="restartGame()">Spela igen</button>
 </div>
 
@@ -60,35 +57,31 @@
 const canvas = document.getElementById("gameCanvas");
 const ctx = canvas.getContext("2d");
 
-canvas.width = window.innerWidth;
-canvas.height = window.innerHeight;
+// 🔧 Resize fix
+function resize() {
+  canvas.width = window.innerWidth;
+  canvas.height = window.innerHeight;
+}
+window.addEventListener("resize", resize);
+resize();
 
-// 🐕 Ladda bild
-let dogImg = new Image();
-dogImg.src = "https://upload.wikimedia.org/wikipedia/commons/6/6f/Keeshond.jpg";
-
-let dog, pipes, score, gameRunning;
-
-// Starta spelet
-function startGame() {
-  document.getElementById("startScreen").style.display = "none";
-  init();
-  gameRunning = true;
-  loop();
+// 🐶 Enkel "Keeshond" (ingen extern bild = stabilt)
+function drawDog(x, y, size) {
+  ctx.fillStyle = "#f4a261";
+  ctx.beginPath();
+  ctx.arc(x + size/2, y + size/2, size/2, 0, Math.PI * 2);
+  ctx.fill();
 }
 
-function restartGame() {
-  document.getElementById("gameOverScreen").style.display = "none";
-  init();
-  gameRunning = true;
-}
+// Game state
+let dog, pipes, score, running;
 
 // Init
 function init() {
   dog = {
     x: 80,
     y: canvas.height / 2,
-    size: 50,
+    size: 40,
     velocity: 0
   };
 
@@ -96,75 +89,92 @@ function init() {
   score = 0;
 }
 
-// Touch + klick
+// Start
+function startGame() {
+  document.getElementById("startScreen").style.display = "none";
+  init();
+  running = true;
+  loop();
+}
+
+// Restart
+function restartGame() {
+  document.getElementById("gameOverScreen").style.display = "none";
+  init();
+  running = true;
+  loop();
+}
+
+// Jump
 function jump() {
-  if (!gameRunning) return;
-  dog.velocity = -10;
+  if (!running) return;
+  dog.velocity = -9;
 }
 
 document.addEventListener("touchstart", jump);
 document.addEventListener("mousedown", jump);
 
-// Skapa hinder
+// Pipes
 function createPipe() {
-  let gap = 180;
-  let top = Math.random() * (canvas.height - gap - 200) + 50;
+  let gap = 160;
+  let top = Math.random() * (canvas.height - gap - 100) + 50;
 
   pipes.push({
     x: canvas.width,
-    width: 70,
+    width: 60,
     top: top,
-    bottom: canvas.height - top - gap
+    passed: false
   });
 }
 
-// Uppdatera
+// Update
 function update() {
-  dog.velocity += 0.6;
+  dog.velocity += 0.5;
   dog.y += dog.velocity;
 
-  if (dog.y < 0 || dog.y > canvas.height) {
+  if (dog.y < 0 || dog.y + dog.size > canvas.height) {
     gameOver();
   }
 
   if (Math.random() < 0.02) createPipe();
 
-  pipes.forEach((pipe, i) => {
-    pipe.x -= 3;
+  pipes.forEach((p, i) => {
+    p.x -= 3;
 
-    // kollision
+    // collision
     if (
-      dog.x < pipe.x + pipe.width &&
-      dog.x + dog.size > pipe.x &&
-      (dog.y < pipe.top || dog.y + dog.size > pipe.top + 180)
+      dog.x < p.x + p.width &&
+      dog.x + dog.size > p.x &&
+      (dog.y < p.top || dog.y + dog.size > p.top + 160)
     ) {
       gameOver();
     }
 
-    // poäng
-    if (pipe.x + pipe.width === dog.x) {
+    // score
+    if (!p.passed && p.x + p.width < dog.x) {
       score++;
+      p.passed = true;
     }
 
-    if (pipe.x < -pipe.width) pipes.splice(i, 1);
+    if (p.x < -p.width) pipes.splice(i, 1);
   });
 }
 
-// Rita
+// Draw
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-  // hund
-  ctx.drawImage(dogImg, dog.x, dog.y, dog.size, dog.size);
+  // dog
+  drawDog(dog.x, dog.y, dog.size);
 
-  // rör
+  // pipes
   ctx.fillStyle = "green";
-  pipes.forEach(pipe => {
-    ctx.fillRect(pipe.x, 0, pipe.width, pipe.top);
-    ctx.fillRect(pipe.x, pipe.top + 180, pipe.width, pipe.bottom);
+  pipes.forEach(p => {
+    ctx.fillRect(p.x, 0, p.width, p.top);
+    ctx.fillRect(p.x, p.top + 160, p.width, canvas.height);
   });
 
-  // poäng
+  // score
   ctx.fillStyle = "white";
   ctx.font = "30px sans-serif";
   ctx.fillText(score, 20, 50);
@@ -172,14 +182,14 @@ function draw() {
 
 // Game over
 function gameOver() {
-  gameRunning = false;
-  document.getElementById("finalScore").innerText = "Poäng: " + score;
+  running = false;
+  document.getElementById("scoreText").innerText = "Poäng: " + score;
   document.getElementById("gameOverScreen").style.display = "flex";
 }
 
 // Loop
 function loop() {
-  if (!gameRunning) return;
+  if (!running) return;
   update();
   draw();
   requestAnimationFrame(loop);
